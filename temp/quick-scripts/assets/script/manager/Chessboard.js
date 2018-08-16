@@ -50,6 +50,12 @@ cc.Class({
 
         // 开始游戏
         G.gameManager.startGame();
+
+        var self = this;
+        // 监听 更新棋盘
+        G.roomSocket.on('update chessboard', function (chessCoor) {
+            self.fallChess(G.gameManager.turn, self.chesses[chessCoor.x][chessCoor.y]);
+        });
     },
 
 
@@ -59,9 +65,12 @@ cc.Class({
         chess.node.on(cc.Node.EventType.TOUCH_END, function (e) {
             if (G.gameManager.gameState === GAME_STATE.PLAYING && G.gameManager.turn === G.stand) {
                 if (chess.type === CHESS_TYPE.NONE) {
-                    if (self.judgePass(G.stand, chess)) {
-                        self.fallChess(chess);
+                    if (self.judgePass(G.gameManager.turn, chess)) {
+                        self.fallChess(G.gameManager.turn, chess);
+                        // 换边
                         G.gameManager.changeTurn();
+                        // 通知换边和对应点棋子
+                        G.roomSocket.emit('update chessboard', chess.coor);
                     }
                 }
             }
@@ -71,13 +80,43 @@ cc.Class({
 
     // 判断该点能否下
     judgePass: function judgePass(turn, chess) {
+        for (var dir = 1; dir <= 8; dir++) {
+            return this.judgeOneDir(chess, turn, dir);
+        }
+        return false;
+    },
+
+
+    // 判断一个方向能否下棋
+    judgeOneDir: function judgeOneDir(chess, turn, dir) {
+        var tempChess = this.nearChess(chess, dir);
+        while (tempChess !== null && tempChess.type === -turn) {
+            tempChess = this.nearChess(tempChess, dir);
+            if (tempChess.type === turn) {
+                return true;
+            }
+        }
+        return false;
+    },
+
+
+    // 下棋子
+    fallChess: function fallChess(turn, chess) {
+        chess.type = turn;
+        // 棋子变色
+        this.changeChess(G.gameManager.turn, chess);
+    },
+
+
+    // 棋子变色
+    changeChess: function changeChess(turn, chess) {
         var tempChess = chess;
         for (var dir = 1; dir <= 8; dir++) {
-            var _tempChess = this.nearChess(chess, dir);
-            while (_tempChess !== null && _tempChess.type === -turn) {
-                _tempChess = this.nearChess(_tempChess, dir);
-                if (_tempChess.type === turn) {
-                    return true;
+            if (this.judgeOneDir(chess, turn, dir)) {
+                tempChess = this.nearChess(tempChess, dir);
+                while (tempChess.type !== turn) {
+                    tempChess.type = turn;
+                    tempChess = this.nearChess(tempChess, dir);
                 }
             }
         }
@@ -140,21 +179,15 @@ cc.Class({
                 break;
         }
         return null;
-    },
-
-
-    // 下棋子
-    fallChess: function fallChess(chess) {
-        chess.type = G.gameManager.turn;
     }
+}
 
-    // start () {
+// start () {
 
-    // },
+// },
 
-    // update (dt) {},
-
-});
+// update (dt) {},
+);
 
 cc._RF.pop();
         }
