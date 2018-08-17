@@ -56,6 +56,10 @@ cc.Class({
         G.roomSocket.on('update chessboard', function (chessCoor) {
             self.fallChess(G.gameManager.turn, self.chesses[chessCoor.x][chessCoor.y]);
         });
+        // 监听 换边
+        G.roomSocket.on('change turn', function () {
+            G.gameManager.changeTurn();
+        });
     },
 
 
@@ -69,8 +73,10 @@ cc.Class({
                         self.fallChess(G.gameManager.turn, chess);
                         // 换边
                         G.gameManager.changeTurn();
-                        // 通知换边和对应点棋子
+                        // 更新对应点棋子
                         G.roomSocket.emit('update chessboard', chess.coor);
+                        // 通知换边
+                        G.roomSocket.emit('change turn');
                     }
                 }
             }
@@ -81,7 +87,10 @@ cc.Class({
     // 判断该点能否下
     judgePass: function judgePass(turn, chess) {
         for (var dir = 1; dir <= 8; dir++) {
-            return this.judgeOneDir(chess, turn, dir);
+            if (this.judgeOneDir(chess, turn, dir)) {
+                return true;
+            }
+            // return this.judgeOneDir(chess, turn, dir)
         }
         return false;
     },
@@ -92,11 +101,39 @@ cc.Class({
         var tempChess = this.nearChess(chess, dir);
         while (tempChess !== null && tempChess.type === -turn) {
             tempChess = this.nearChess(tempChess, dir);
+            console.log(tempChess);
+            console.log(dir);
+            console.log(turn);
             if (tempChess.type === turn) {
                 return true;
             }
         }
         return false;
+    },
+
+
+    // 判断玩家是否还有棋子可下
+    judgeMoveAble: function judgeMoveAble(turn) {
+        var tryChess = null;
+        for (var x = 0; x < this.COL; x++) {
+            for (var y = 0; y < this.ROW; y++) {
+                tryChess = this.chesses[x][y];
+                if (tryChess.type === CHESS_TYPE.NONE) {
+                    this.judgePass(turn, tryChess);
+                }
+            }
+        }
+        return false;
+    },
+
+
+    // 判断输赢
+    judgeWin: function judgeWin(turn) {
+        var selfMoveAble = this.judgeMoveAble(turn);
+        var oppoMoveAble = this.judgeMoveAble(-turn);
+        if (!selfMoveAble && oppoMoveAble) {
+            G.gameManager.changeTurn();
+        }
     },
 
 
@@ -110,8 +147,8 @@ cc.Class({
 
     // 棋子变色
     changeChess: function changeChess(turn, chess) {
-        var tempChess = chess;
         for (var dir = 1; dir <= 8; dir++) {
+            var tempChess = chess;
             if (this.judgeOneDir(chess, turn, dir)) {
                 tempChess = this.nearChess(tempChess, dir);
                 while (tempChess.type !== turn) {
